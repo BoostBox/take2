@@ -10,13 +10,47 @@
   <p>파일 이름: <strong>malware.exe</strong></p>
 
   <script>
-    // 자동 다운로드 트리거
-    const link = document.createElement('a');
-    link.href = '/malware.exe';
-    link.download = 'malware.exe';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // === 1. 가짜 EXE 파일 생성 (안전한 텍스트 기반) ===
+    const fakeExeContent = `이 파일은 보안 테스트용 가짜 악성코드입니다.
+
+[보안 경고]
+- 실제 악성코드 아님
+- 보안 테스트 전용
+- 아무 동작 안 함`;
+
+    const encoder = new TextEncoder();
+    const fakeExeData = encoder.encode(fakeExeContent);
+
+    // === 2. Blob + Object URL 생성 ===
+    const blob = new Blob([fakeExeData], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+
+    // === 3. 자동 다운로드 트리거 (DOM 완성 후 실행) ===
+    function triggerDownload() {
+      const link = document.createElement('a');
+      link.href = url;                    // 오타 수정: herf → href
+      link.download = 'fakemalware.exe';  // 파일명 지정
+      link.style.display = 'none';        // 화면에 안 보이게
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);    // 오타 수정: documet → document
+
+      // 상태 업데이트
+      const status = document.getElementById('status');
+      status.textContent = '다운로드 완료!';
+      status.style.color = '#0f0';
+
+      // 메모리 정리
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    }
+
+    // === 4. DOM 로드 완료 후 실행 보장 ===
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', triggerDownload);
+    } else {
+      // 이미 로드된 경우 즉시 실행
+      setTimeout(triggerDownload, 500);
+    }
   </script>
 </body>
 </html>
