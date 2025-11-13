@@ -1,0 +1,275 @@
+/**
+ * 관리자 URL 빌더 (수정 버전)
+ * - 현재 탭의 location을 기준 URL로 사용
+ * - 서브도메인 생성 시 기존 호스트 전체 앞에 접두어를 붙임
+ * 예: 현재 호스트가 test.server.com 이면 "admin" -> admin.test.server.com
+ * - 섹션 클릭 시 → 모든 링크 일괄로 한 번에 새 탭 열기 (0.3초 간격)
+ *
+ * 사용 주의: 반드시 소유/허가된 대상에서만 사용하세요.
+ */
+(function(){
+  'use strict';
+  const sections = {
+    "관리자 루트 경로": [
+      "/admin","/administrator","/admin/login","/adminpanel","/admin-panel","/admin_area",
+      "/adminarea","/admin_console","/adminconsole","/admincp","/adm","/manage","/management",
+      "/management/login","/control","/controlpanel","/control-panel","/cpanel","/console",
+      "/dashboard","/dashboard/login","/backend","/backoffice","/staff","/staffarea",
+      "/staff/login","/system","/systemadmin","/siteadmin","/site-admin","/secure",
+      "/secure/login","/private","/portal","/portal/admin","/portal/login","/operator",
+      "/support","/manage/login","/superadmin","/root","/root/login","/svcadmin","/adminkit",
+      "/adminui","/admin-ui"
+    ],
+    "관리 하위/기능형 경로": [
+      "/users/manage","/users/admin","/accounts","/accounts/admin","/settings",
+      "/settings/admin","/config","/configuration","/logs","/logs/view","/monitor",
+      "/monitoring","/health","/stats","/analytics","/metrics","/jobs","/tasks",
+      "/scheduler","/maintenance","/maintenance_mode","/uploads/admin","/files/manage",
+      "/tenants","/org/admin","/billing","/invoices/admin"
+    ],
+    "환경/개발/테스트 서브도메인 (subdomain 예시)": [
+      "dev","development","staging","stage","test","qa","demo","beta","preview"
+    ],
+    "관리용 서브도메인 (admin-type)": [
+      "admin","administrator","admin-panel","adminpanel","manage","management","console",
+      "control","controlpanel","cpanel","dashboard","backend","backoffice","portal",
+      "staff","admin-api","admin-dashboard","webadmin","secure","secure-login","root",
+      "system","ops","operations","admin-staging","admin-dev"
+    ],
+    "운영/모니터링/헬스 관련": [
+      "/status","/health","/metrics","/monitoring","/nginx_status","/server-status"
+    ]
+  };
+  function normalizeBaseFromLocation(loc) {
+    try {
+      const url = (typeof loc === 'string') ? new URL(loc) : new URL(loc.href);
+      url.pathname = url.pathname.replace(/\/+$/, '');
+      return url;
+    } catch (e) {
+      return null;
+    }
+  }
+  function makeFullUrl(baseUrlObj, path) {
+    if (path.startsWith('/')) {
+      const u = new URL(baseUrlObj.href);
+      u.pathname = path;
+      u.search = '';
+      u.hash = '';
+      return u.href;
+    } else {
+      const newHost = `${path}.${baseUrlObj.hostname}`;
+      const portSegment = baseUrlObj.port ? `:${baseUrlObj.port}` : '';
+      return `${baseUrlObj.protocol}//${newHost}${portSegment}/`;
+    }
+  }
+  const existing = document.getElementById('admin-url-builder-root');
+  if (existing) existing.remove();
+  const root = document.createElement('div');
+  root.id = 'admin-url-builder-root';
+  root.style.position = 'fixed';
+  root.style.right = '12px';
+  root.style.top = '12px';
+  root.style.zIndex = 999999;
+  root.style.maxWidth = '520px';
+  root.style.fontFamily = 'Arial, sans-serif';
+  root.style.fontSize = '13px';
+  root.style.boxShadow = '0 6px 22px rgba(0,0,0,0.18)';
+  root.style.background = '#fff';
+  root.style.border = '1px solid #e3e6ea';
+  root.style.borderRadius = '8px';
+  root.style.padding = '12px';
+  root.style.color = '#222';
+  const title = document.createElement('div');
+  title.style.fontWeight = '700';
+  title.style.marginBottom = '6px';
+  title.textContent = '관리자 URL 빌더 (자동 감지 모드)';
+  root.appendChild(title);
+  const desc = document.createElement('div');
+  desc.style.fontSize = '12px';
+  desc.style.color = '#555';
+  desc.style.marginBottom = '8px';
+  desc.innerHTML = '현재 탭의 URL을 자동으로 사용합니다. 허가된 대상에서만 사용하세요.';
+  root.appendChild(desc);
+  const baseRow = document.createElement('div');
+  baseRow.style.marginBottom = '8px';
+  baseRow.style.display = 'flex';
+  baseRow.style.flexDirection = 'column';
+  baseRow.style.gap = '6px';
+  const detectedLabel = document.createElement('div');
+  detectedLabel.style.fontSize = '12px';
+  detectedLabel.style.color = '#333';
+  detectedLabel.textContent = '감지된 대상 URL:';
+  baseRow.appendChild(detectedLabel);
+  const detectedBox = document.createElement('div');
+  detectedBox.style.padding = '8px';
+  detectedBox.style.background = '#f7f9fc';
+  detectedBox.style.border = '1px solid #e6eefb';
+  detectedBox.style.borderRadius = '4px';
+  detectedBox.style.fontSize = '12px';
+  detectedBox.style.color = '#0b3d91';
+  baseRow.appendChild(detectedBox);
+  root.appendChild(baseRow);
+  const btnArea = document.createElement('div');
+  btnArea.style.display = 'flex';
+  btnArea.style.flexWrap = 'wrap';
+  btnArea.style.gap = '6px';
+  btnArea.style.marginBottom = '8px';
+  root.appendChild(btnArea);
+  const out = document.createElement('div');
+  out.style.maxHeight = '420px';
+  out.style.overflow = 'auto';
+  out.style.borderTop = '1px dashed #eee';
+  out.style.paddingTop = '8px';
+  root.appendChild(out);
+  const foot = document.createElement('div');
+  foot.style.marginTop = '8px';
+  foot.style.textAlign = 'right';
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '닫기';
+  closeBtn.style.padding = '6px 10px';
+  closeBtn.style.border = '1px solid #ccc';
+  closeBtn.style.background = '#fafafa';
+  closeBtn.style.borderRadius = '4px';
+  closeBtn.onclick = () => root.remove();
+  foot.appendChild(closeBtn);
+  root.appendChild(foot);
+  document.body.appendChild(root);
+  const sectionButtons = {};
+  Object.keys(sections).forEach(key => {
+    const b = document.createElement('button');
+    b.textContent = key;
+    b.style.padding = '6px 10px';
+    b.style.border = '1px solid #ddd';
+    b.style.background = '#fff';
+    b.style.borderRadius = '4px';
+    b.style.cursor = 'pointer';
+    b.onclick = () => renderSection(key);
+    btnArea.appendChild(b);
+    sectionButtons[key] = b;
+  });
+  function clearOut() { out.innerHTML = ''; }
+  function renderSection(key) {
+    clearOut();
+    const p = document.createElement('div');
+    p.style.marginBottom = '6px';
+    p.style.fontWeight = '600';
+    p.textContent = `${key} (${sections[key].length} items)`;
+    out.appendChild(p);
+
+    const baseObj = normalizeBaseFromLocation(window.location);
+    if (!baseObj) {
+      const err = document.createElement('div');
+      err.style.color = 'red';
+      err.textContent = '현재 탭의 URL을 해석할 수 없습니다.';
+      out.appendChild(err);
+      return;
+    }
+
+    const urls = sections[key].map(p => makeFullUrl(baseObj, p));
+
+    // 일괄 열기 버튼
+    const openAllBtn = document.createElement('button');
+    openAllBtn.textContent = `일괄 열기 (${urls.length}개)`;
+    openAllBtn.style.padding = '8px 12px';
+    openAllBtn.style.border = '1px solid #e91e63';
+    openAllBtn.style.background = '#e91e63';
+    openAllBtn.style.color = '#fff';
+    openAllBtn.style.borderRadius = '6px';
+    openAllBtn.style.fontWeight = 'bold';
+    openAllBtn.style.cursor = 'pointer';
+    openAllBtn.style.marginBottom = '12px';
+    openAllBtn.onclick = () => {
+      if (!confirm(`경고: ${urls.length}개의 탭을 한 번에 엽니다.\n팝업 차단 허용 필요.\n계속하시겠습니까?`)) return;
+
+      let delay = 0;
+      urls.forEach((url, i) => {
+        setTimeout(() => {
+          try {
+            const win = window.open(url, '_blank');
+            if (!win) console.warn('팝업 차단됨:', url);
+          } catch (e) {
+            console.error('탭 열기 실패:', url, e);
+          }
+        }, delay);
+        delay += 300;
+      });
+
+      alert(`${urls.length}개 탭 열기 시작!\n(팝업 차단 시 브라우저 설정에서 허용 필요)`);
+    };
+    out.appendChild(openAllBtn);
+
+    // 모든 URL 복사 버튼
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = '모든 URL 복사';
+    copyBtn.style.marginRight = '8px';
+    copyBtn.style.padding = '6px 10px';
+    copyBtn.style.border = '1px solid #2d7bf6';
+    copyBtn.style.background = '#2d7bf6';
+    copyBtn.style.color = '#fff';
+    copyBtn.style.borderRadius = '4px';
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(urls.join('\n'));
+        copyBtn.textContent = '복사됨';
+        setTimeout(() => copyBtn.textContent = '모든 URL 복사', 1500);
+      } catch (e) {
+        alert('클립보드 접근 실패');
+      }
+    };
+    out.appendChild(copyBtn);
+
+    const list = document.createElement('div');
+    list.style.display = 'flex';
+    list.style.flexDirection = 'column';
+    list.style.gap = '6px';
+    out.appendChild(list);
+
+    urls.forEach(u => {
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.alignItems = 'center';
+      row.style.gap = '8px';
+
+      const a = document.createElement('a');
+      a.href = u;
+      a.textContent = u;
+      a.target = '_blank';
+      a.style.color = '#1a73e8';
+      a.style.wordBreak = 'break-all';
+      a.style.fontSize = '12px';
+      row.appendChild(a);
+
+      const cbtn = document.createElement('button');
+      cbtn.textContent = '복사';
+      cbtn.style.padding = '4px 8px';
+      cbtn.style.border = '1px solid #ccc';
+      cbtn.style.background = '#fff';
+      cbtn.style.borderRadius = '4px';
+      cbtn.style.fontSize = '11px';
+      cbtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(u);
+          cbtn.textContent = '복사됨';
+          setTimeout(() => cbtn.textContent = '복사', 1200);
+        } catch (e) {
+          alert('클립보드 접근 실패');
+        }
+      };
+      row.appendChild(cbtn);
+
+      list.appendChild(row);
+    });
+  }
+
+  const baseObj = normalizeBaseFromLocation(window.location);
+  if (!baseObj) {
+    detectedBox.textContent = '감지 실패: 현재 페이지의 URL을 해석할 수 없습니다.';
+    Object.values(sectionButtons).forEach(b => b.disabled = true);
+  } else {
+    detectedBox.textContent = baseObj.origin + (baseObj.pathname || '');
+    Object.values(sectionButtons).forEach(b => b.disabled = false);
+    renderSection(Object.keys(sections)[0]);
+  }
+
+  console.log('관리자 URL 빌더 로드됨 — 섹션 클릭 시 일괄 열기 기능 활성화');
+})();
