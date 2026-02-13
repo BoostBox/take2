@@ -1,0 +1,9 @@
+IIS 서버 설정
+
+헤더 정보 노출 삭제              https://learn2you.tistory.com/16
+Server: Microsoft-IIS/10.0
+X-Powered-By: ASP.NET
+X-AspNet-Version: 4.0.30319
+X-AspNetMvc-Version: 5.2
+
+RESPONSE_SERVER, RESPONSE_X-POWERED-BY, RESPONSE_X-ASPNET-VERSION 이렇게 3개 해야 response 헤더에 서버 버전 정보, 어플리케이션 프레임워크 정보까지 삭제됨
