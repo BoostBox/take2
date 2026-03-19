@@ -1,0 +1,214 @@
+/**
+ * 서버·WAS 노출 경로 탐색기 — 2025 실무 완전판
+ * Tomcat, IIS, Nginx, Apache, WebLogic, JBoss 등
+ * 반드시 본인 소유이거나 서면 허가를 받은 시스템에서만 사용
+ */
+(function () {
+  'use strict';
+
+  const sections = {
+    // Apache HTTP Server
+    "Apache 상태·디버그": [
+      "/server-status", "/server-info", "/apache-status", "/status",
+      "/icons/", "/manual/", "/cgi-bin/", "/phpinfo.php", "/info.php", "/test.php"
+    ],
+
+    // Nginx
+    "Nginx 상태·설정 노출": [
+      "/nginx_status", "/status", "/stub_status", "/basic_status",
+      "/nginx.html", "/health", "/.env", "/nginx.conf"
+    ],
+
+    // IIS / Windows
+    "IIS 기본·디버그 페이지": [
+      "/iisstart.htm", "/welcome.png", "/iis-85.png", "/iis-100.png",
+      "/printer", "/printers", "/trace.axd", "/elmah.axd",
+      "/web.config", "/web.config.bak", "/web.config~"
+    ],
+
+    // Apache Tomcat (가장 자주 노출)
+    "Tomcat Manager & 샘플": [
+      "/manager/html", "/manager/status", "/manager/jmxproxy", "/manager/text/list",
+      "/host-manager/html", "/examples/", "/examples/servlets/", "/examples/jsp/",
+      "/jsp-examples/", "/docs/", "/tomcat.gif", "/asdf"
+    ],
+
+    // WebLogic
+    "WebLogic 콘솔": [
+      "/console", "/console/login/LoginForm.jsp", "/console/j_security_check",
+      "/wls", "/em", "/bea_wls_internal/", "/wl_management"
+    ],
+
+    // WebSphere
+    "WebSphere 관리 콘솔": [
+      "/ibm/console", "/admin", "/websphere/", "/wasadmin",
+      "/admin/console", "/IBMIHS/"
+    ],
+
+    // JBoss / WildFly
+    "JBoss & WildFly": [
+      "/jmx-console/", "/admin-console/", "/web-console/",
+      "/invoker/JMXInvokerServlet", "/status?full=true", "/console/"
+    ],
+
+    // Jetty
+    "Jetty 관리 페이지": [
+      "/jetty/", "/jetty-admin/", "/admin/", "/jetty/timing"
+    ],
+
+    // Resin
+    "Resin 관리자": [
+      "/resin-admin/", "/admin/", "/resin-doc/"
+    ],
+
+    // 기타 자주 노출되는 민감 경로
+    "공통 민감 파일·디렉터리": [
+      "/.env", "/.env.bak", "/config.php", "/wp-config.php",
+      "/.git/HEAD", "/.svn/entries", "/backup/", "/backups/",
+      "/phpmyadmin/", "/phpMyAdmin/", "/pma/", "/adminer.php",
+      "/server-status", "/server-info", "/logs/", "/access.log"
+    ]
+  };
+
+  // URL 정규화
+  function getBase() {
+    try {
+      const u = new URL(location.href);
+      u.pathname = u.pathname.replace(/\/+$/, '');
+      return u;
+    } catch (e) { return null; }
+  }
+
+  function makeUrl(base, path) {
+    if (path.startsWith('/')) {
+      const u = new URL(base.href);
+      u.pathname = path;
+      u.search = u.hash = '';
+      return u.href;
+    }
+    const port = base.port ? `:${base.port}` : '';
+    return `${base.protocol}//${path}.${base.hostname}${port}/`;
+  }
+
+  // 기존 UI 제거
+  const old = document.getElementById('srv-explorer');
+  if (old) old.remove();
+
+  const root = document.createElement('div');
+  root.id = 'srv-explorer';
+  root.style.cssText = `
+    position:fixed;right:10px;top:10px;z-index:999999;width:380px;
+    max-height:90vh;background:#fff;border:2px solid #d32f2f;border-radius:10px;
+    font-family:Arial,sans-serif;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,0.3);
+    overflow:hidden;display:flex;flex-direction:column;
+  `;
+
+  // 헤더
+  const header = document.createElement('div');
+  header.style.cssText = 'background:#d32f2f;color:#fff;padding:8px 12px;font-weight:bold;font-size:14px;display:flex;justify-content:space-between;align-items:center;';
+  header.innerHTML = '서버·WAS 노출 탐색기 <small style="font-weight:normal;">(Tomcat/IIS/Nginx 등)</small>';
+  root.appendChild(header);
+
+  // 닫기 버튼 (항상 보임)
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.style.cssText = 'background:none;border:none;color:#fff;font-size:24px;cursor:pointer;padding:0 8px;line-height:1;';
+  closeBtn.onclick = () => root.remove();
+  header.appendChild(closeBtn);
+
+  // 기준 URL 표시
+  const baseInfo = document.createElement('div');
+  baseInfo.style.cssText = 'padding:6px 10px;background:#fff8e0;border-bottom:1px solid #ddd;font-size:12px;word-break:break-all;';
+  root.appendChild(baseInfo);
+
+  // 버튼 영역
+  const btns = document.createElement('div');
+  btns.style.cssText = 'padding:8px;display:flex;flex-wrap:wrap;gap:6px;background:#f9f9f9;border-bottom:1px solid #eee;max-height:120px;overflow:auto;';
+  root.appendChild(btns);
+
+  // 결과 영역
+  const output = document.createElement('div');
+  output.style.cssText = 'flex:1;overflow:auto;padding:10px;background:#fff;';
+  root.appendChild(output);
+
+  document.body.appendChild(root);
+
+  // 섹션 버튼 생성
+  Object.keys(sections).forEach(name => {
+    const b = document.createElement('button');
+    b.textContent = name.split(' ')[0];
+    b.title = name;
+    b.style.cssText = 'padding:5px 9px;font-size:11px;border:1px solid #999;background:#fff;border-radius:4px;cursor:pointer;';
+    b.onclick = () => showSection(name);
+    btns.appendChild(b);
+  });
+
+  function showSection(name) {
+    output.innerHTML = `<div style="font-weight:bold;color:#d32f2f;margin-bottom:8px;">${name} (${sections[name].length}개)</div>`;
+
+    const base = getBase();
+    if (!base) { output.innerHTML += '<div style="color:red;">URL 분석 실패</div>'; return; }
+    baseInfo.textContent = base.origin + base.pathname;
+
+    const urls = sections[name].map(p => makeUrl(base, p));
+
+    // 일괄 열기
+    const openAll = document.createElement('button');
+    openAll.textContent = `전체 열기 (${urls.length})`;
+    openAll.style.cssText = 'margin:4px 0;padding:6px 10px;background:#e91e63;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;';
+    openAll.onclick = () => {
+      if (!confirm(`${urls.length}개 탭을 엽니다. 계속?`)) return;
+      let d = 0;
+      urls.forEach(u => setTimeout(() => window.open(u, '_blank'), d += 300));
+    };
+    output.appendChild(openAll);
+
+    // 전체 복사
+    const copyAll = document.createElement('button');
+    copyAll.textContent = '복사';
+    copyAll.style.cssText = 'margin-left:6px;padding:6px 10px;background:#1976d2;color:#fff;border:none;border-radius:4px;cursor:pointer;';
+    copyAll.onclick = async () => {
+      await navigator.clipboard.writeText(urls.join('\n'));
+      copyAll.textContent = '복사됨';
+      setTimeout(() => copyAll.textContent = '복사', 1500);
+    };
+    output.appendChild(copyAll);
+
+    // URL 리스트
+    const list = document.createElement('div');
+    list.style.cssText = 'margin-top:10px;display:flex;flex-direction:column;gap:6px;';
+    urls.forEach(u => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:8px;align-items:center;background:#f8f9fa;padding:6px;border-radius:4px;';
+
+      const a = document.createElement('a');
+      a.href = u; a.target = '_blank'; a.textContent = u;
+      a.style.cssText = 'flex:1;color:#1a73e8;font-size:12px;word-break:break-all;';
+      row.appendChild(a);
+
+      const c = document.createElement('button');
+      c.textContent = '복사';
+      c.style.cssText = 'padding:3px 7px;font-size:10px;border:1px solid #ccc;background:#fff;border-radius:3px;cursor:pointer;';
+      c.onclick = async () => {
+        await navigator.clipboard.writeText(u);
+        c.textContent = '복사됨';
+        setTimeout(() => c.textContent = '복사', 1000);
+      };
+      row.appendChild(c);
+
+      list.appendChild(row);
+    });
+    output.appendChild(list);
+  }
+
+  // 초기 표시
+  const base = getBase();
+  if (base) {
+    baseInfo.textContent = base.origin + base.pathname;
+    showSection(Object.keys(sections)[0]);
+  } else {
+    baseInfo.textContent = 'URL 분석 실패';
+  }
+
+  console.log('서버·WAS 노출 탐색기 로드 완료 (Tomcat/IIS/Nginx 등)');
+})();
