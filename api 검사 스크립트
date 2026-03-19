@@ -1,0 +1,537 @@
+(() => {
+
+  console.clear();
+
+  console.log('%c100개 오픈소스 완전 탐지 vFinal (50개 형식 동일)', 'color:#ff5722;font-weight:bold;font-size:16px');
+
+  // -------------------------------------------------
+
+  // 1. 안전한 전역 변수 접근 헬퍼 (Anonymous 오류 방지)
+
+  // -------------------------------------------------
+
+  const safeGet = (path) => {
+
+    try {
+
+      return path.split('.').reduce((obj, key) => (obj && obj[key] !== undefined) ? obj[key] : undefined, window);
+
+    } catch (e) { 
+
+      return undefined; 
+
+    }
+
+  };
+
+  // -------------------------------------------------
+
+  // 2. 100개 라이브러리 정의 (4중 검사 + 상세 정보 함수 포함)
+
+  // -------------------------------------------------
+
+  const libraries = [
+
+    { name: 'jQuery',               var: '$',               dom: null,             src: 'jquery',           version: () => $.fn?.jquery,               detail: () => ({버전: $.fn?.jquery, 이벤트수: Object.keys(safeGet('$._data')?.(document,'events')||{}).length, 플러그인수: Object.keys($.fn||{}).length, 사용예시: "$('.btn').click(...)"}) },
+
+    { name: 'jQuery UI',            var: 'jQuery.ui',       dom: '.ui-draggable',  src: 'jquery-ui',        version: () => $.ui?.version,              detail: () => ({버전: $.ui?.version, 드래그요소: $('.ui-draggable').length, 정렬요소: $('.ui-sortable').length, 사용예시: "$('.drag').draggable()"}) },
+
+    { name: 'jQuery Migrate',       var: null,              dom: null,             src: 'jquery-migrate',   version: () => '확인됨',                   detail: () => ({버전: '확인됨'}) },
+
+    { name: 'Bootstrap',            var: 'bootstrap',       dom: '[data-toggle]',  src: 'bootstrap',        version: () => bootstrap?.Tooltip?.VERSION || 'CSS', detail: () => ({버전: bootstrap?.Tooltip?.VERSION || 'CSS', 모달수: $('[data-toggle="modal"]').length, 툴팁수: $('[data-toggle="tooltip"]').length}) },
+
+    { name: 'Popper.js',            var: 'Popper',          dom: null,             src: 'popper',           version: () => Popper?.VERSION,            detail: () => ({버전: Popper?.VERSION}) },
+
+    { name: 'Moment.js',            var: 'moment',          dom: null,             src: 'moment',           version: () => moment?.version,            detail: () => ({버전: moment?.version, 현재시간: moment().format('YYYY-MM-DD HH:mm'), 타임존: moment.tz?.guess() || '없음'}) },
+
+    { name: 'Day.js',               var: 'dayjs',           dom: null,             src: 'dayjs',            version: () => dayjs?.version,             detail: () => ({버전: dayjs?.version, 현재시간: dayjs().format()}) },
+
+    { name: 'Datepicker',           var: null,              dom: '.datepicker',    src: 'datepicker',       version: () => $.fn?.datepicker ? '확인됨' : undefined, detail: () => ({개수: $('.datepicker').length}) },
+
+    { name: 'CKEditor 4',           var: 'CKEDITOR',        dom: '.cke',           src: 'ckeditor',         version: () => CKEDITOR?.version,          detail: () => { const inst = Object.keys(CKEDITOR.instances); return {버전: CKEDITOR.version, 인스턴스수: inst.length, 인스턴스목록: inst.join(', '), 첫내용: inst[0] ? CKEDITOR.instances[inst[0]].getData().substring(0,100)+'...' : '없음'}; }},
+
+    { name: 'CKEditor 5',           var: 'ClassicEditor',   dom: '.ck-editor',     src: 'ckeditor5',        version: () => ClassicEditor?.builtAt ? new Date(ClassicEditor.builtAt).toISOString().split('T')[0] : '확인됨', detail: () => ({버전: '확인됨'}) },
+
+    { name: 'TinyMCE',              var: 'tinymce',         dom: '.tox',           src: 'tinymce',          version: () => tinymce?.version,           detail: () => ({버전: tinymce?.version, 에디터수: tinymce.editors?.length || 0}) },
+
+    { name: 'Quill',                var: 'Quill',           dom: '.ql-editor',     src: 'quill',            version: () => Quill?.Version,             detail: () => ({에디터수: $('.ql-editor').length}) },
+
+    { name: 'CodeMirror',           var: 'CodeMirror',      dom: '.CodeMirror',    src: 'codemirror',       version: () => CodeMirror?.version,        detail: () => ({인스턴스수: $('.CodeMirror').length}) },
+
+    { name: 'DataTables',           var: null,              dom: '.dataTable',     src: 'datatables',       version: () => $.fn?.DataTable?.VERSION || '확인됨', detail: () => { const t = $('.dataTable').first(); const api = t.DataTable(); return {테이블수: $('.dataTable').length, 행수: api?.rows().count() || 0, 검색어: api?.search() || '없음'}; }},
+
+    { name: 'Select2',              var: null,              dom: '.select2',       src: 'select2',          version: () => $.fn?.select2 ? '확인됨' : undefined, detail: () => ({셀렉트수: $('.select2').length, 첫옵션수: $('.select2').first().find('option').length}) },
+
+    { name: 'Chosen',               var: null,              dom: '.chosen',        src: 'chosen',           version: () => '확인됨',                   detail: () => ({개수: $('.chosen').length}) },
+
+    { name: 'Parsley',              var: null,              dom: '[data-parsley-validate]', src: 'parsley', version: () => $.fn?.parsley ? '확인됨' : undefined, detail: () => ({폼수: $('[data-parsley-validate]').length}) },
+
+    { name: 'jQuery Validate',      var: null,              dom: null,             src: 'validate',         version: () => $.fn?.validate ? '확인됨' : undefined, detail: () => ({폼수: $('form').filter((i,e)=>$(e).validate).length}) },
+
+    { name: 'Dropzone',             var: 'Dropzone',        dom: '.dropzone',      src: 'dropzone',         version: () => Dropzone?.version,          detail: () => ({영역수: $('.dropzone').length}) },
+
+    { name: 'Fileinput',            var: null,              dom: '.fileinput',     src: 'fileinput',        version: () => $.fn?.fileinput ? '확인됨' : undefined, detail: () => ({개수: $('.fileinput').length}) },
+
+    { name: 'Slick',                var: null,              dom: '.slick-slider',  src: 'slick',            version: () => $.fn?.slick ? '확인됨' : undefined, detail: () => { const s = $('.slick-slider').first(); return {슬라이더수: $('.slick-slider').length, 슬라이드수: s.find('.slick-slide').length, 현재인덱스: s.slick('slickCurrentSlide')}; }},
+
+    { name: 'Owl Carousel',         var: null,              dom: '.owl-carousel',  src: 'owl.carousel',     version: () => $.fn?.owlCarousel ? '확인됨' : undefined, detail: () => ({개수: $('.owl-carousel').length}) },
+
+    { name: 'Swiper',               var: 'Swiper',          dom: '.swiper',        src: 'swiper',           version: () => Swiper?.version,            detail: () => ({개수: $('.swiper').length}) },
+
+    { name: 'Fancybox',             var: null,              dom: '[data-fancybox]', src: 'fancybox',        version: () => $.fancybox?.version,        detail: () => ({갤러리수: $('[data-fancybox]').length}) },
+
+    { name: 'Lightbox',             var: null,              dom: '[data-lightbox]', src: 'lightbox',        version: () => '확인됨',                   detail: () => ({개수: $('[data-lightbox]').length}) },
+
+    { name: 'Chart.js',             var: 'Chart',           dom: 'canvas',         src: 'chart.',           version: () => Chart?.version,             detail: () => ({버전: Chart?.version, 차트수: $('canvas').filter((i,e)=>e.getContext).length}) },
+
+    { name: 'FullCalendar',         var: 'FullCalendar',    dom: '#calendar',      src: 'fullcalendar',     version: () => FullCalendar?.version,      detail: () => ({캘린더수: $('#calendar').length}) },
+
+    { name: 'SweetAlert',           var: 'swal',            dom: null,             src: 'sweetalert',       version: () => '1.x',                      detail: () => ({버전: '1.x'}) },
+
+    { name: 'SweetAlert2',          var: 'Swal',            dom: null,             src: 'sweetalert2',      version: () => Swal?.version,              detail: () => ({버전: Swal?.version}) },
+
+    { name: 'Toastr',               var: 'toastr',          dom: null,             src: 'toastr',           version: () => toastr?.version,            detail: () => ({버전: toastr?.version}) },
+
+    { name: 'BlockUI',              var: null,              dom: null,             src: 'blockui',          version: () => $.blockUI ? '확인됨' : undefined, detail: () => ({사용가능: true}) },
+
+    { name: 'Lodash',               var: '_',               dom: null,             src: 'lodash',           version: () => _.VERSION,                  detail: () => ({버전: _.VERSION}) },
+
+    { name: 'Underscore.js',        var: '_',               dom: null,             src: 'underscore',       version: () => safeGet('_') && !_.VERSION ? '1.x' : undefined, detail: () => ({버전: '1.x'}) },
+
+    { name: 'Axios',                var: 'axios',           dom: null,             src: 'axios',            version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Fetch API',            var: null,              dom: null,             src: null,               version: () => 'fetch' in window ? 'Native' : undefined, detail: () => ({버전: 'Native'}) },
+
+    { name: 'GSAP',                 var: 'gsap',            dom: null,             src: 'gsap',             version: () => gsap?.version,              detail: () => ({버전: gsap?.version}) },
+
+    { name: 'AdminLTE',             var: null,              dom: '.sidebar',       src: 'adminlte',         version: () => '확인됨',                   detail: () => ({사이드바: true}) },
+
+    { name: 'MetisMenu',            var: null,              dom: '.metismenu',     src: 'metismenu',        version: () => '확인됨',                   detail: () => ({메뉴수: $('.metismenu').length}) },
+
+    { name: 'iCheck',               var: null,              dom: '.icheck',        src: 'icheck',           version: () => '확인됨',                   detail: () => ({체크박스수: $('.icheck').length}) },
+
+    { name: 'Bootstrap Switch',     var: null,              dom: '.bootstrap-switch', src: 'bootstrap-switch', version: () => '확인됨',                   detail: () => ({스위치수: $('.bootstrap-switch').length}) },
+
+    { name: 'Summernote',           var: 'summernote',      dom: '.summernote',    src: 'summernote',       version: () => $.summernote?.version,      detail: () => ({버전: $.summernote?.version, 에디터수: $('.summernote').length}) },
+
+    { name: 'Inputmask',            var: null,              dom: '[data-inputmask]', src: 'inputmask',      version: () => $.fn?.inputmask ? '확인됨' : undefined, detail: () => ({마스크폼수: $('[data-inputmask]').length}) },
+
+    { name: 'Daterangepicker',      var: null,              dom: '.daterangepicker', src: 'daterangepicker', version: () => $.fn?.daterangepicker ? '확인됨' : undefined, detail: () => ({개수: $('.daterangepicker').length}) },
+
+    { name: 'Bootstrap Colorpicker',var: null,              dom: '.colorpicker',   src: 'colorpicker',      version: () => '확인됨',                   detail: () => ({개수: $('.colorpicker').length}) },
+
+    { name: 'Bootstrap Tagsinput',  var: null,              dom: '.bootstrap-tagsinput', src: 'tagsinput',  version: () => '확인됨',                   detail: () => ({개수: $('.bootstrap-tagsinput').length}) },
+
+    { name: 'jQuery Knob',          var: null,              dom: '.knob',          src: 'knob',             version: () => $.fn?.knob ? '확인됨' : undefined, detail: () => ({노브수: $('.knob').length}) },
+
+    { name: 'Sparkline',            var: null,              dom: '.sparkline',     src: 'sparkline',        version: () => $.fn?.sparkline ? '확인됨' : undefined, detail: () => ({차트수: $('.sparkline').length}) },
+
+    { name: 'Flot',                 var: '$.plot',          dom: '.flot-chart',    src: 'flot',             version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Morris.js',            var: 'Morris',          dom: '.morris-chart',  src: 'morris',           version: () => Morris?.version,            detail: () => ({버전: Morris?.version}) },
+
+    { name: 'Raphaël',              var: 'Raphael',         dom: null,             src: 'raphael',          version: () => Raphael?.version,           detail: () => ({버전: Raphael?.version}) },
+
+    { name: 'PACE',                 var: 'Pace',            dom: null,             src: 'pace',             version: () => Pace?.version,              detail: () => ({버전: Pace?.version}) },
+
+    { name: 'FastClick',            var: 'FastClick',       dom: null,             src: 'fastclick',        version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Vue.js',               var: 'Vue',             dom: '[v-cloak]',      src: 'vue',              version: () => Vue?.version,               detail: () => ({버전: Vue?.version, 앱수: $('[v-cloak]').length}) },
+
+    { name: 'React',                var: 'React',           dom: '[data-reactroot]', src: 'react',          version: () => React?.version,             detail: () => ({버전: React?.version, 루트수: $('[data-reactroot]').length}) },
+
+    { name: 'Angular',              var: 'angular',         dom: '[ng-app]',       src: 'angular',          version: () => angular?.version?.full,     detail: () => ({버전: angular?.version?.full || '확인됨'}) },
+
+    { name: 'Alpine.js',            var: 'Alpine',          dom: '[x-data]',       src: 'alpine',           version: () => Alpine?.version,            detail: () => ({버전: Alpine?.version}) },
+
+    { name: 'Backbone.js',          var: 'Backbone',        dom: null,             src: 'backbone',         version: () => Backbone?.VERSION,          detail: () => ({버전: Backbone?.VERSION}) },
+
+    { name: 'Ember.js',             var: 'Ember',           dom: '[data-ember]',   src: 'ember',            version: () => Ember?.VERSION,             detail: () => ({버전: Ember?.VERSION}) },
+
+    { name: 'Knockout.js',          var: 'ko',              dom: '[data-bind]',    src: 'knockout',         version: () => ko?.version,                detail: () => ({버전: ko?.version}) },
+
+    { name: 'Handlebars',           var: 'Handlebars',      dom: null,             src: 'handlebars',       version: () => Handlebars?.VERSION,        detail: () => ({버전: Handlebars?.VERSION}) },
+
+    { name: 'Mustache',             var: 'Mustache',        dom: null,             src: 'mustache',         version: () => Mustache?.version,          detail: () => ({버전: Mustache?.version}) },
+
+    { name: 'Laravel Echo',         var: 'Echo',            dom: null,             src: 'echo',             version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Pusher',               var: 'Pusher',          dom: null,             src: 'pusher',           version: () => Pusher?.VERSION,            detail: () => ({버전: Pusher?.VERSION}) },
+
+    { name: 'Socket.IO Client',     var: 'io',              dom: null,             src: 'socket.io',        version: () => io?.version,                detail: () => ({버전: io?.version}) },
+
+    { name: 'SortableJS',           var: 'Sortable',        dom: null,             src: 'sortable',         version: () => Sortable?.version,          detail: () => ({버전: Sortable?.version}) },
+
+    { name: 'Dragula',              var: 'dragula',         dom: null,             src: 'dragula',          version: () => dragula?.version,           detail: () => ({버전: dragula?.version}) },
+
+    { name: 'Hammer.js',            var: 'Hammer',          dom: null,             src: 'hammer',           version: () => Hammer?.VERSION,            detail: () => ({버전: Hammer?.VERSION}) },
+
+    { name: 'Lottie',               var: 'lottie',          dom: null,             src: 'lottie',           version: () => lottie?.version,            detail: () => ({버전: lottie?.version}) },
+
+    { name: 'Anime.js',             var: 'anime',           dom: null,             src: 'anime',            version: () => anime?.version,             detail: () => ({버전: anime?.version}) },
+
+    { name: 'Three.js',             var: 'THREE',           dom: 'canvas',         src: 'three',            version: () => THREE?.REVISION,            detail: () => ({버전: THREE?.REVISION}) },
+
+    { name: 'AOS',                  var: 'AOS',             dom: '[data-aos]',     src: 'aos',              version: () => AOS?.version,               detail: () => ({버전: AOS?.version}) },
+
+    { name: 'Tippy.js',             var: 'tippy',           dom: null,             src: 'tippy',            version: () => tippy?.version,             detail: () => ({버전: tippy?.version}) },
+
+    { name: 'Notyf',                var: 'Notyf',           dom: null,             src: 'notyf',            version: () => Notyf?.version,             detail: () => ({버전: Notyf?.version}) },
+
+    { name: 'iziToast',             var: 'iziToast',        dom: null,             src: 'izitoast',         version: () => iziToast?.version,          detail: () => ({버전: iziToast?.version}) },
+
+    { name: 'Magnific Popup',       var: null,              dom: '.mfp',           src: 'magnific',         version: () => $.magnificPopup ? '확인됨' : undefined, detail: () => ({사용가능: true}) },
+
+    { name: 'Photoswipe',           var: null,              dom: '.pswp',          src: 'photoswipe',       version: () => '확인됨',                   detail: () => ({갤러리수: $('.pswp').length}) },
+
+    { name: 'Masonry',              var: 'Masonry',         dom: '.grid',          src: 'masonry',          version: () => Masonry?.version,           detail: () => ({버전: Masonry?.version}) },
+
+    { name: 'Isotope',              var: 'Isotope',         dom: '.grid',          src: 'isotope',          version: () => Isotope?.version,           detail: () => ({버전: Isotope?.version}) },
+
+    { name: 'Monaco Editor',        var: 'monaco',          dom: '.monaco-editor', src: 'monaco',           version: () => monaco?.editor?.getVersion?.() || '확인됨', detail: () => ({버전: '확인됨'}) },
+
+    { name: 'Highlight.js',         var: 'hljs',            dom: 'pre code',       src: 'highlight',        version: () => hljs?.version,              detail: () => ({버전: hljs?.version}) },
+
+    { name: 'Prism.js',             var: 'Prism',           dom: 'code[class*="language"]', src: 'prism',   version: () => Prism?.version,             detail: () => ({버전: Prism?.version}) },
+
+    { name: 'WordPress',            var: 'wp',              dom: '#wpadminbar',    src: 'wp-includes',      version: () => wp?.version || '확인됨',    detail: () => ({관리자바: $('#wpadminbar').length > 0, 버전: wp?.version || '확인됨'}) },
+
+    { name: 'Vue Router',           var: 'VueRouter',       dom: null,             src: 'vue-router',       version: () => VueRouter?.version,         detail: () => ({버전: VueRouter?.version}) },
+
+    { name: 'Vuex',                 var: 'Vuex',            dom: null,             src: 'vuex',             version: () => Vuex?.VERSION,              detail: () => ({버전: Vuex?.VERSION}) },
+
+    { name: 'Redux',                var: 'Redux',           dom: null,             src: 'redux',            version: () => Redux?.version,             detail: () => ({버전: Redux?.version}) },
+
+    { name: 'MobX',                 var: 'mobx',            dom: null,             src: 'mobx',             version: () => mobx?.version,              detail: () => ({버전: mobx?.version}) },
+
+    { name: 'Svelte',               var: 'svelte',          dom: null,             src: 'svelte',           version: () => svelte?.VERSION,            detail: () => ({버전: svelte?.VERSION}) },
+
+    { name: 'Nuxt.js',              var: 'nuxt',            dom: null,             src: 'nuxt',             version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Next.js',              var: '__NEXT_DATA__',  dom: null,             src: 'next',             version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Gatsby',               var: '___gatsby',       dom: null,             src: 'gatsby',           version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Gridsome',             var: '__gridsome',      dom: null,             src: 'gridsome',         version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Quasar',               var: 'Quasar',          dom: null,             src: 'quasar',           version: () => Quasar?.version,            detail: () => ({버전: Quasar?.version}) },
+
+    { name: 'Vuetify',              var: null,              dom: '.v-application', src: 'vuetify',          version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Element UI',           var: null,              dom: '.el-table',      src: 'element-ui',       version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Ant Design',           var: null,              dom: '.ant-btn',       src: 'antd',             version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Materialize',          var: null,              dom: '.materialize-textarea', src: 'materialize', version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Bulma',                var: null,              dom: '.navbar-burger', src: 'bulma',            version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Tailwind CSS',         var: null,              dom: null,             src: 'tailwind',         version: () => document.documentElement.classList.contains('tailwind') ? '확인됨' : undefined, detail: () => ({사용가능: true}) },
+
+    { name: 'Foundation',           var: null,              dom: '.foundation',    src: 'foundation',       version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Semantic UI',          var: null,              dom: '.ui.dropdown',   src: 'semantic',         version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'UIKit',                var: null,              dom: '.uk-button',     src: 'uikit',            version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Pure.css',             var: null,              dom: null,             src: 'purecss',          version: () => $('link[href*="purecss"]').length > 0 ? '확인됨' : undefined, detail: () => ({사용가능: true}) },
+
+    { name: 'Spectre.css',          var: null,              dom: '.form-input',    src: 'spectre',          version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Milligram',            var: null,              dom: '.button',        src: 'milligram',        version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Pico.css',             var: null,              dom: null,             src: 'pico',             version: () => $('link[href*="pico"]').length > 0 ? '확인됨' : undefined, detail: () => ({사용가능: true}) },
+
+    { name: 'NES.css',              var: null,              dom: '.nes-btn',       src: 'nes',              version: () => '확인됨',                   detail: () => ({사용가능: true}) },
+
+    { name: 'Bootstrap Icons',      var: null,              dom: '.bi',            src: 'bootstrap-icons',  version: () => '확인됨',                   detail: () => ({아이콘수: $('.bi').length}) },
+
+    { name: 'Font Awesome',         var: null,              dom: '.fa, .fas, .far, .fab', src: 'fontawesome', version: () => '확인됨',                   detail: () => ({아이콘수: $('.fa, .fas, .far, .fab').length}) },
+
+    { name: 'Material Icons',       var: null,              dom: '.material-icons', src: 'material-icons',  version: () => '확인됨',                   detail: () => ({아이콘수: $('.material-icons').length}) },
+
+    { name: 'Feather Icons',        var: null,              dom: 'i[data-feather]', src: 'feather',         version: () => '확인됨',                   detail: () => ({아이콘수: $('i[data-feather]').length}) },
+
+    { name: 'Ionicons',             var: null,              dom: '.ion',           src: 'ionicons',         version: () => '확인됨',                   detail: () => ({아이콘수: $('.ion').length}) },
+
+    { name: 'Heroicons',            var: null,              dom: '.heroicon',      src: 'heroicons',        version: () => '확인됨',                   detail: () => ({사용가능: true}) }
+
+  ];
+
+  // -------------------------------------------------
+
+  // 3. 스크립트 src 기반 탐지
+
+  // -------------------------------------------------
+
+  const loadedScripts = Array.from(document.scripts)
+
+    .map(s => s.src?.toLowerCase() || '')
+
+    .filter(Boolean);
+
+  const srcDetected = new Set();
+
+  libraries.forEach(lib => {
+
+    if (lib.src && loadedScripts.some(src => src.includes(lib.src))) {
+
+      srcDetected.add(lib.name);
+
+    }
+
+  });
+
+  // -------------------------------------------------
+
+  // 4. DOM 기반 탐지
+
+  // -------------------------------------------------
+
+  const domDetected = new Set();
+
+  libraries.forEach(lib => {
+
+    if (lib.dom && document.querySelector(lib.dom)) {
+
+      domDetected.add(lib.name);
+
+    }
+
+  });
+
+  // -------------------------------------------------
+
+  // 5. 전역 변수 기반 탐지
+
+  // -------------------------------------------------
+
+  const varDetected = new Set();
+
+  libraries.forEach(lib => {
+
+    if (lib.var && safeGet(lib.var)) {
+
+      varDetected.add(lib.name);
+
+    }
+
+  });
+
+  // -------------------------------------------------
+
+  // 6. 최종 결과 수집
+
+  // -------------------------------------------------
+
+  const results = libraries.map(lib => {
+
+    const detected = varDetected.has(lib.name) || domDetected.has(lib.name) || srcDetected.has(lib.name);
+
+    const version = detected && lib.version ? lib.version() : (detected ? '확인됨' : '-');
+
+    return {
+
+      라이브러리: lib.name,
+
+      상태: detected ? '사용 중' : '미사용',
+
+      버전: version,
+
+      출처: [
+
+        varDetected.has(lib.name) ? '전역' : '',
+
+        domDetected.has(lib.name) ? 'DOM' : '',
+
+        srcDetected.has(lib.name) ? 'src' : ''
+
+      ].filter(Boolean).join(', ') || '-'
+
+    };
+
+  });
+
+  // -------------------------------------------------
+
+  // 7. 결과 출력 (50개 스크립트와 동일 형식)
+
+  // -------------------------------------------------
+
+  const used = results.filter(r => r.상태 === '사용 중');
+
+  const unused = results.filter(r => r.상태 === '미사용');
+
+  console.log(`%c총 ${libraries.length}개 검사 → 사용 중: ${used.length}개`, 'color:#4caf50;font-weight:bold;font-size:14px');
+
+  if (used.length > 0) {
+
+    console.log('%c사용 중인 라이브러리', 'color:#4caf50;font-weight:bold');
+
+    console.table(used);
+
+  }
+
+  if (unused.length > 0) {
+
+    console.log(`%c미사용 라이브러리 (${unused.length}개)`, 'color:#9e9e9e;font-style:italic');
+
+    console.table(unused.map(r => ({ 라이브러리: r.라이브러리 })));
+
+  }
+
+  // -------------------------------------------------
+
+  // 8. 사용 중인 항목에 대한 상세 정보 출력
+
+  // -------------------------------------------------
+
+  if (used.length > 0) {
+
+    console.log('%c사용 중인 라이브러리 상세 정보', 'color:#2196f3;font-weight:bold');
+
+    libraries.filter(lib => used.some(u => u.라이브러리 === lib.name)).forEach(lib => {
+
+      console.log(`%c${lib.name}`, 'color:#1976d2;font-weight:bold');
+
+      try {
+
+        console.table([lib.detail()]);
+
+      } catch (e) {
+
+        console.log('상세 정보 오류:', e.message);
+
+      }
+
+    });
+
+  }
+
+  // -------------------------------------------------
+  // 9. 발견된 라이브러리 기반 기본 페이지 경로 제안 (100개 전부 매핑)
+  // -------------------------------------------------
+  if (used.length > 0) {
+    console.log('%c발견된 라이브러리 기반 기본 페이지 경로 제안', 'color:#ff9800;font-weight:bold');
+    const pathMap = {
+      'jQuery': ['/admin', '/dashboard', '/login', '/panel'],
+      'jQuery UI': ['/admin', '/dashboard', '/form', '/widgets'],
+      'jQuery Migrate': ['/admin', '/dashboard'],
+      'Bootstrap': ['/admin', '/panel', '/cpanel', '/dashboard'],
+      'Popper.js': ['/admin', '/dashboard'],
+      'Moment.js': ['/admin/calendar', '/schedule', '/events', '/reports'],
+      'Day.js': ['/admin/calendar', '/schedule', '/events'],
+      'Datepicker': ['/admin/form', '/booking', '/events'],
+      'CKEditor 4': ['/admin/content', '/admin/post/edit', '/cms', '/editor'],
+      'CKEditor 5': ['/admin/content', '/admin/post/edit', '/cms', '/editor'],
+      'TinyMCE': ['/admin/content', '/admin/post/edit', '/cms', '/editor'],
+      'Quill': ['/admin/content', '/admin/post/edit', '/cms'],
+      'CodeMirror': ['/admin/code', '/editor', '/ide', '/dev'],
+      'DataTables': ['/admin/users', '/admin/list', '/dashboard', '/reports'],
+      'Select2': ['/admin/users', '/admin/settings', '/form', '/search'],
+      'Chosen': ['/admin/users', '/form', '/settings'],
+      'Parsley': ['/admin/form', '/register', '/contact'],
+      'jQuery Validate': ['/admin/form', '/register', '/contact'],
+      'Dropzone': ['/admin/upload', '/filemanager', '/media', '/gallery'],
+      'Fileinput': ['/admin/upload', '/filemanager', '/media'],
+      'Slick': ['/admin/gallery', '/slider', '/home', '/landing'],
+      'Owl Carousel': ['/admin/gallery', '/slider', '/home'],
+      'Swiper': ['/admin/gallery', '/slider', '/home', '/portfolio'],
+      'Fancybox': ['/admin/gallery', '/media', '/photos', '/lightbox'],
+      'Lightbox': ['/admin/gallery', '/media', '/photos'],
+      'Chart.js': ['/admin/stats', '/dashboard/analytics', '/reports', '/metrics'],
+      'FullCalendar': ['/admin/calendar', '/schedule', '/events', '/booking'],
+      'SweetAlert': ['/admin', '/dashboard', '/settings'],
+      'SweetAlert2': ['/admin', '/dashboard', '/settings', '/notifications'],
+      'Toastr': ['/admin', '/dashboard', '/notifications', '/alerts'],
+      'BlockUI': ['/admin', '/loading', '/dashboard'],
+      'Lodash': ['/admin', '/dashboard', '/app'],
+      'Underscore.js': ['/admin', '/dashboard', '/app'],
+      'Axios': ['/admin/api', '/dashboard', '/app'],
+      'Fetch API': ['/admin', '/dashboard'],
+      'GSAP': ['/admin/animation', '/landing', '/home', '/demo'],
+      'AdminLTE': ['/admin', '/dashboard', '/admin/index.html', '/panel'],
+      'MetisMenu': ['/admin', '/sidebar', '/dashboard'],
+      'iCheck': ['/admin/form', '/settings', '/profile'],
+      'Bootstrap Switch': ['/admin/settings', '/toggle', '/preferences'],
+      'Summernote': ['/admin/content', '/post/edit', '/cms', '/editor'],
+      'Inputmask': ['/admin/form', '/register', '/profile'],
+      'Daterangepicker': ['/admin/reports', '/analytics', '/filter'],
+      'Bootstrap Colorpicker': ['/admin/settings', '/theme', '/customize'],
+      'Bootstrap Tagsinput': ['/admin/tags', '/post/edit', '/categories'],
+      'jQuery Knob': ['/admin/stats', '/dashboard', '/progress'],
+      'Sparkline': ['/admin/stats', '/dashboard', '/metrics'],
+      'Flot': ['/admin/charts', '/stats', '/analytics'],
+      'Morris.js': ['/admin/charts', '/stats', '/reports'],
+      'Raphaël': ['/admin/charts', '/vector', '/graphics'],
+      'PACE': ['/admin', '/loading', '/dashboard'],
+      'FastClick': ['/admin', '/mobile', '/dashboard'],
+      'Vue.js': ['/admin', '/dashboard', '/app', '/panel'],
+      'React': ['/admin', '/dashboard', '/app', '/panel'],
+      'Angular': ['/admin', '/dashboard', '/app', '/panel'],
+      'Alpine.js': ['/admin', '/dashboard', '/app'],
+      'Backbone.js': ['/admin', '/app', '/dashboard'],
+      'Ember.js': ['/admin', '/app', '/dashboard'],
+      'Knockout.js': ['/admin', '/app', '/dashboard'],
+      'Handlebars': ['/admin', '/templates', '/dashboard'],
+      'Mustache': ['/admin', '/templates', '/dashboard'],
+      'Laravel Echo': ['/admin', '/realtime', '/chat', '/notifications'],
+      'Pusher': ['/admin', '/realtime', '/chat', '/live'],
+      'Socket.IO Client': ['/admin', '/realtime', '/chat', '/live'],
+      'SortableJS': ['/admin/list', '/dragdrop', '/kanban'],
+      'Dragula': ['/admin/list', '/dragdrop', '/kanban'],
+      'Hammer.js': ['/admin/touch', '/mobile', '/gestures'],
+      'Lottie': ['/landing', '/home', '/animation', '/intro'],
+      'Anime.js': ['/landing', '/home', '/animation', '/effects'],
+      'Three.js': ['/3d', '/demo', '/visual', '/canvas'],
+      'AOS': ['/landing', '/home', '/about', '/scroll'],
+      'Tippy.js': ['/admin', '/tooltip', '/help', '/dashboard'],
+      'Notyf': ['/admin', '/notifications', '/alerts'],
+      'iziToast': ['/admin', '/notifications', '/alerts'],
+      'Magnific Popup': ['/admin/gallery', '/media', '/lightbox'],
+      'Photoswipe': ['/admin/gallery', '/media', '/photos'],
+      'Masonry': ['/admin/gallery', '/grid', '/portfolio'],
+      'Isotope': ['/admin/gallery', '/grid', '/filter'],
+      'Monaco Editor': ['/admin/code', '/editor', '/ide', '/dev'],
+      'Highlight.js': ['/docs', '/api', '/blog', '/code'],
+      'Prism.js': ['/docs', '/api', '/blog', '/code'],
+      'WordPress': ['/wp-admin', '/wp-login.php', '/admin'],
+      'Vue Router': ['/admin', '/app', '/dashboard'],
+      'Vuex': ['/admin', '/app', '/dashboard'],
+      'Redux': ['/admin', '/app', '/dashboard'],
+      'MobX': ['/admin', '/app', '/dashboard'],
+      'Svelte': ['/admin', '/app', '/dashboard'],
+      'Nuxt.js': ['/admin', '/dashboard', '/panel'],
+      'Next.js': ['/admin', '/dashboard', '/panel'],
+      'Gatsby': ['/admin', '/dashboard', '/panel'],
+      'Quasar': ['/admin', '/dashboard', '/app'],
+      'Vuetify': ['/admin', '/dashboard', '/panel'],
+      'Element UI': ['/admin', '/dashboard', '/panel'],
+      'Ant Design': ['/admin', '/dashboard', '/panel'],
+      'Materialize': ['/admin', '/dashboard', '/panel'],
+      'Bulma': ['/admin', '/dashboard', '/panel'],
+      'Tailwind CSS': ['/admin', '/dashboard', '/panel'],
+      'Foundation': ['/admin', '/dashboard', '/panel'],
+      'Semantic UI': ['/admin', '/dashboard', '/panel'],
+      'UIKit': ['/admin', '/dashboard', '/panel']
+    };
+
+    const suggested = new Set();
+    used.forEach(u => {
+      const paths = pathMap[u.라이브러리] || ['/admin', '/dashboard', '/login'];
+      paths.forEach(p => suggested.add(p));
+    });
+
+    if (suggested.size === 0) {
+      console.log('기본 경로 없음 → /admin, /login 시도 추천');
+    } else {
+      Array.from(suggested).sort().forEach(p => {
+        console.log(`window.open('${p}') → ${location.origin}${p}`);
+      });
+    }
+  }
+
+
+  console.log('%c완전 탐지 완료! (100개 전부 검사됨)', 'color:#00bcd4;font-weight:bold;font-size:16px');
+
+})(); 
