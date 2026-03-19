@@ -1,0 +1,138 @@
+(async () => {
+  // --- 검토할 키워드 (필요하면 추가/수정) ---
+  const keywords = [
+    // 서버/OS 호출 관련 표기
+    "child_process", "child_process.exec", "child_process.spawn", "exec(", "execFile(", "spawn(", "spawnSync(", "system(", "popen(", "shell_exec(", "passthru(", "proc_open(", "Runtime.getRuntime().exec",
+    // Python/Java 표기 (클라이언트 스크립트에 적혀있을 수 있음)
+    "os.system(", "subprocess.run(", "subprocess.Popen(", "ProcessBuilder(",
+    // 위험한 JS 런타임/원격 코드 실행 표기 (검토)
+    "eval(", "new Function(", "setTimeout(", "setInterval(", "document.write(", "innerHTML",
+    // 패키지/라이브러리 표기
+    "execa", "cross-spawn", "child_process.execFile", "child_process.execSync"
+  ];
+
+  // 몇 줄 전/후까지 문맥을 보여줄지
+  const CONTEXT_LINES = 2;
+
+  // 스크립트 수집 (inline + external)
+  const scripts = Array.from(document.scripts || []).map(s => ({
+    src: s.src && s.src.trim() !== "" ? s.src : "(inline)",
+    isInline: !(s.src && s.src.trim()),
+    el: s
+  }));
+
+  // 결과 저장
+  const findings = [];
+
+  // 텍스트 스캔 함수
+  function scanText(srcLabel, text) {
+    const lines = text.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      for (const kw of keywords) {
+        if (line.includes(kw)) {
+          // capture context
+          const start = Math.max(0, i - CONTEXT_LINES);
+          const end = Math.min(lines.length - 1, i + CONTEXT_LINES);
+          const context = [];
+          for (let j = start; j <= end; j++) {
+            context.push({ ln: j + 1, text: lines[j] });
+          }
+          findings.push({
+            src: srcLabel,
+            lineNumber: i + 1,
+            keyword: kw,
+            lineText: line.trim(),
+            context
+          });
+        }
+      }
+    }
+  }
+
+  // --- 1) inline scripts 검사 ---
+  for (const s of scripts.filter(x => x.isInline)) {
+    try {
+      const text = s.el.textContent || "";
+      scanText("(inline)", text);
+    } catch (e) {
+      console.warn("inline script read error:", e);
+    }
+  }
+
+  // --- 2) 외부 스크립트 fetch 검사 (CORS 제한 주의) ---
+  for (const s of scripts.filter(x => !x.isInline)) {
+    const url = s.src;
+    try {
+      // 시도: fetch (CORS로 차단될 수 있음)
+      const res = await fetch(url, { method: "GET", mode: "cors", cache: "no-cache" });
+      if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+      const text = await res.text();
+      scanText(url, text);
+    } catch (err) {
+      console.warn(`⚠️ Could not fetch ${url}: ${err.message}. Please inspect this script in Sources panel manually.`);
+      // 가능한 경우, attempt to read inline loaded script via script element (some inline content might be accessible)
+      // (하지만 외부 스크립트 textContent는 빈 경우가 많음)
+      try {
+        const el = document.querySelector(`script[src="${url}"]`);
+        if (el && el.textContent && el.textContent.trim()) {
+          scanText(`${url} (from element.textContent)`, el.textContent);
+        }
+      } catch (e){ /* ignore */ }
+    }
+  }
+
+  // --- 3) inline handler attributes 검사 (onclick 등) ---
+  const inlineAttributes = ["onclick","onchange","onload","onerror","onsubmit","onmouseover","onfocus","onblur","onkeydown","onkeyup"];
+  for (const el of document.querySelectorAll("*")) {
+    for (const attr of inlineAttributes) {
+      if (el.hasAttribute && el.hasAttribute(attr)) {
+        const code = el.getAttribute(attr);
+        if (!code) continue;
+        for (const kw of keywords) {
+          if (code.includes(kw)) {
+            findings.push({
+              src: `inline attribute ${attr} on <${el.tagName.toLowerCase()}>`,
+              lineNumber: 1,
+              keyword: kw,
+              lineText: code.trim(),
+              context: [{ ln: 1, text: code.trim() }]
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // --- 출력 ---
+  if (findings.length === 0) {
+    console.log("✅ 잠재적 키워드 없음(로컬/클라이언트 스크립트 기준). 단, CORS로 가져오지 못한 외부 스크립트는 수동 확인 필요.");
+    return;
+  }
+
+  console.groupCollapsed(`⚠️ ${findings.length}개 잠재적 후보 발견 — 파일/라인/키워드/문맥 표시`);
+  for (const f of findings) {
+    console.groupCollapsed(`${f.src}  —  line ${f.lineNumber}  —  [${f.keyword}]`);
+    console.log("Matched line:", f.lineText);
+    console.log("Context (±" + CONTEXT_LINES + " lines):");
+    for (const c of f.context) {
+      // 시각적 표시: 현재 라인은 '>>'로 강조
+      if (c.ln === f.lineNumber) {
+        console.log(`>> ${c.ln}: ${c.text}`);
+      } else {
+        console.log(`   ${c.ln}: ${c.text}`);
+      }
+    }
+    console.groupEnd();
+  }
+  console.groupEnd();
+
+  // --- 간단 요약 테이블(검색 결과) ---
+  try {
+    const summary = findings.map(f => ({ source: f.src, line: f.lineNumber, keyword: f.keyword }));
+    console.table(summary);
+  } catch (e) { /* ignore */ }
+
+  // --- 추가 안내 ---
+  console.log("다음 단계 권장: 위 후보 파일/라인을 서버 저장소에서 열어 실제 명령 실행 코드 여부(예: shell 호출, subprocess exec 등)를 코드 리뷰하세요.");
+})();
