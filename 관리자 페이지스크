@@ -1,0 +1,222 @@
+javascript:(function(){
+  'use strict';
+
+  // 접두어 목록 (필요하면 더 추가 가능)
+  const prefixes = [
+    "dev","development","devel","develop",
+    "test","testing","tst",
+    "staging","stage","stg","preprod","pre-prod","uat",
+    "qa","demo","beta","preview","sandbox","review","ci","int","perf",
+    "dev01","dev02","test01","test02","stage01","stage02",
+    "admin-dev","dev-admin","admin-test","test-admin"
+  ];
+
+  const sections = {
+    "관리자 루트 경로": [
+      "/admin","/administrator","/admin/login","/adminpanel","/admin-panel","/admin_area",
+      "/adminarea","/admin_console","/adminconsole","/admincp","/adm","/manage","/management",
+      "/management/login","/control","/controlpanel","/control-panel","/cpanel","/console",
+      "/dashboard","/dashboard/login","/backend","/backoffice","/staff","/staffarea",
+      "/staff/login","/system","/systemadmin","/siteadmin","/site-admin","/secure",
+      "/secure/login","/private","/portal","/portal/admin","/portal/login","/operator",
+      "/support","/manage/login","/superadmin","/root","/root/login","/svcadmin","/adminkit",
+      "/adminui","/admin-ui"
+    ],
+    "관리 하위/기능형 경로": [
+      "/users/manage","/users/admin","/accounts","/accounts/admin","/settings","/settings/admin",
+      "/config","/configuration","/logs","/logs/view","/monitor","/monitoring","/health",
+      "/stats","/analytics","/metrics","/jobs","/tasks","/scheduler","/maintenance",
+      "/maintenance_mode","/uploads/admin","/files/manage","/tenants","/org/admin",
+      "/billing","/invoices/admin"
+    ],
+    "환경/개발/테스트 서브도메인 (앞·뒤·합성 모두)": prefixes,
+    "관리용 서브도메인": [
+      "admin","administrator","admin-panel","adminpanel","manage","management","console",
+      "control","controlpanel","cpanel","dashboard","backend","backoffice","portal",
+      "staff","admin-api","admin-dashboard","webadmin","secure","secure-login","root",
+      "system","ops","operations","admin-staging","admin-dev"
+    ],
+    "운영/모니터링/헬스 관련": [
+      "/status","/health","/metrics","/monitoring","/nginx_status","/server-status",
+      "/actuator","/env","/info","/debug","/phpinfo"
+    ]
+  };
+
+  // 현재 페이지 URL 정규화
+  function normalizeBaseFromLocation(loc) {
+    try {
+      const url = new URL(loc.href || loc);
+      url.pathname = url.pathname.replace(/\/+$/, '');
+      return url;
+    } catch(e) { return null; }
+  }
+
+  // 도메인에서 main domain과 suffix 분리 (co.kr, com.br 등도 정상 처리)
+  function getDomainParts(hostname) {
+    const parts = hostname.split('.');
+    if (parts.length < 2) return { main: hostname, suffix: '' };
+
+    const compoundTLDs = ['co.uk','com.br','co.kr','ne.jp','com.au','co.jp','go.th','com.tr'];
+    const lastTwo = parts.slice(-2).join('.');
+    const isCompound = compoundTLDs.some(t => lastTwo.endsWith(t));
+
+    const splitIdx = isCompound ? parts.length - 3 : parts.length - 2;
+    return {
+      main: parts.slice(0, splitIdx).join('.'),
+      suffix: parts.slice(splitIdx).join('.')
+    };
+  }
+
+  // 모든 변형 생성 (dev.test.com, testdev.com, devtest.com 등)
+  function generateAllSubdomains(hostname) {
+    const result = new Set();
+    const { main, suffix } = getDomainParts(hostname);
+
+    prefixes.forEach(p => {
+      const clean = p.replace(/^admin-|-admin$/g, '');
+
+      // 1. 앞에 붙이기
+      result.add(`${p}.${hostname}`);
+
+      // 2. 뒤에 붙이기 (test.com → testdev.com)
+      result.add(`${main}${p}.${suffix}`);
+      result.add(`${main}-${p}.${suffix}`);
+
+      // 3. 완전 합성 (devtest.com, testdev.com)
+      if (clean) {
+        result.add(`${clean}${main}.${suffix}`);
+        result.add(`${main}${clean}.${suffix}`);
+      }
+    });
+
+    return [...result];
+  }
+
+  // 일반 경로 또는 일반 서브도메인 URL 생성
+  function makeFullUrl(baseUrlObj, item) {
+    if (item.startsWith('/')) {
+      const u = new URL(baseUrlObj.href);
+      u.pathname = item;
+      u.search = ''; u.hash = '';
+      return u.href;
+    } else {
+      const port = baseUrlObj.port ? `:${baseUrlObj.port}` : '';
+      return `${baseUrlObj.protocol}//${item}.${baseUrlObj.hostname}${port}/`;
+    }
+  }
+
+  // 기존 창 제거
+  const existing = document.getElementById('admin-url-builder-root');
+  if (existing) existing.remove();
+
+  const root = document.createElement('div');
+  root.id = 'admin-url-builder-root';
+  root.style.cssText = 'position:fixed;top:12px;right:12px;z-index:999999;max-width:560px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:15px;box-shadow:0 8px 32px rgba(0,0,0,0.25);font-family:Arial,sans-serif;font-size:13px;color:#222;';
+  root.innerHTML = `
+    <div style="font-weight:700;margin-bottom:8px;">관리자 URL 빌더 (완전판)</div>
+    <div style="font-size:12px;color:#555;margin-bottom:10px;">허가된 대상에서만 사용하세요.</div>
+    <div id="detected" style="padding:8px;background:#f0f7ff;border:1px solid #bbd9ff;border-radius:4px;font-family:monospace;font-size:12px;margin-bottom:10px;"></div>
+    <div id="buttons" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+    <div id="output" style="max-height:520px;overflow:auto;border-top:1px dashed #ddd;padding-top:10px;"></div>
+    <div style="text-align:right;margin-top:10px;"><button onclick="this.closest('#admin-url-builder-root').remove()" style="padding:6px 12px;border:1px solid #ccc;background:#f9f9f9;border-radius:4px;cursor:pointer;">닫기</button></div>
+  `;
+  document.body.appendChild(root);
+
+  const detectedBox = root.querySelector('#detected');
+  const btnContainer = root.querySelector('#buttons');
+  const output = root.querySelector('#output');
+
+  const baseObj = normalizeBaseFromLocation(window.location);
+  if (!baseObj) {
+    detectedBox.textContent = 'URL 감지 실패';
+    alert('현재 페이지 URL을 읽을 수 없습니다.');
+    return;
+  }
+  detectedBox.textContent = baseObj.origin;
+
+  // 섹션 버튼 생성
+  Object.keys(sections).forEach(sectionName => {
+    const btn = document.createElement('button');
+    btn.textContent = sectionName;
+    btn.style.cssText = 'padding:6px 10px;border:1px solid #ccc;background:#fff;border-radius:4px;cursor:pointer;font-size:12px;';
+    btn.onclick = function() {
+      output.innerHTML = '';
+      let urls = [];
+
+      if (sectionName.includes('환경') || sectionName.includes('서브도메인')) {
+        const variants = generateAllSubdomains(baseObj.hostname);
+        urls = variants.map(v => {
+          const port = baseObj.port ? `:${baseObj.port}` : '';
+          return `${baseObj.protocol}//${v}${port}/`;
+        });
+      } else {
+        urls = sections[sectionName].map(item => makeFullUrl(baseObj, item));
+      }
+
+      // 제목
+      const title = document.createElement('div');
+      title.style.cssText = 'font-weight:600;margin-bottom:8px;';
+      title.textContent = `${sectionName} (${urls.length}개)`;
+      output.appendChild(title);
+
+      // 일괄 열기 버튼 (초당 1개 = 1000ms 간격)
+      const openAll = document.createElement('button');
+      openAll.textContent = `일괄 열기 (${urls.length}개)`;
+      openAll.style.cssText = 'background:#e91e63;color:#fff;border:none;padding:8px 16px;border-radius:6px;margin-right:8px;cursor:pointer;font-weight:bold;';
+      openAll.onclick = () => {
+        if (!confirm(`${urls.length}개의 탭을 천천히 엽니다 (초당 1개).\n팝업 차단 허용 필요!\n계속?`)) return;
+        let i = 0;
+        const interval = setInterval(() => {
+          if (i >= urls.length) {
+            clearInterval(interval);
+            alert('모든 탭 열기 완료!');
+            return;
+          }
+          window.open(urls[i], '_blank');
+          i++;
+        }, 1000); // 1000ms = 초당 1개
+      };
+      output.appendChild(openAll);
+
+      // 전체 복사 버튼
+      const copyAll = document.createElement('button');
+      copyAll.textContent = '모든 URL 복사';
+      copyAll.style.cssText = 'background:#1a73e8;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;';
+      copyAll.onclick = async () => {
+        await navigator.clipboard.writeText(urls.join('\n'));
+        copyAll.textContent = '복사됨';
+        setTimeout(() => copyAll.textContent = '모든 URL 복사', 1500);
+      };
+      output.appendChild(copyAll);
+
+      // URL 목록
+      const list = document.createElement('div');
+      list.style.cssText = 'margin-top:12px;display:flex;flex-direction:column;gap:6px;';
+      urls.forEach(url => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.textContent = url;
+        a.style.cssText = 'color:#1a73e8;font-size:12px;word-break:break-all;';
+        const copyBtn = document.createElement('button');
+        copyBtn.textContent = '복사';
+        copyBtn.style.cssText = 'font-size:11px;padding:3px 7px;border:1px solid #ccc;background:#fff;border-radius:3px;cursor:pointer;';
+        copyBtn.onclick = async () => {
+          await navigator.clipboard.writeText(url);
+          copyBtn.textContent = '복사됨';
+          setTimeout(() => copyBtn.textContent = '복사', 1000);
+        };
+        row.appendChild(a);
+        row.appendChild(copyBtn);
+        list.appendChild(row);
+      });
+      output.appendChild(list);
+    };
+    btnContainer.appendChild(btn);
+  });
+
+  // 첫 섹션 자동 표시
+  btnContainer.firstChild?.click();
+
+  console.log('관리자 URL 빌더 완전판 로드 완료 (test.com → testdev.com, devtest.com 등 모두 생성 + 초당 1탭)');
+})();
