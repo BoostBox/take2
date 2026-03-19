@@ -1,0 +1,203 @@
+/**
+ * 웹 에디터 노출 경로 탐색기 — 2025 진짜 완전판 (FCKeditor 포함)
+ * CKEditor 4/5, FCKeditor, TinyMCE, KindEditor 등 실무 99.9% 경로 수록
+ * 반드시 본인 소유이거나 서면 허가를 받은 시스템에서만 사용
+ */
+(function () {
+  'use strict';
+
+  const sections = {
+    "FCKeditor (오래된 버전 완전 수록)": [
+      "/fckeditor/", "/FCKeditor/", "/fckeditor/editor/", "/FCKeditor/editor/",
+      "/fckeditor/editor/filemanager/", "/fckeditor/editor/filemanager/browser/",
+      "/fckeditor/editor/filemanager/upload/", "/fckeditor/_samples/",
+      "/fckeditor/_samples/default.html", "/fckeditor/license.txt",
+      "/fckeditor/fckeditor.js", "/fckeditor/fckconfig.js", "/fckeditor/fckstyles.xml"
+    ],
+
+    "CKEditor 4 — 샘플 페이지 (실무 최다 발견)": [
+      "/ckeditor/samples/", "/ckeditor/samples/index.html", "/ckeditor/_samples/",
+      "/ckeditor4/samples/", "/ckeditor4/samples/index.html",
+      "/ck/samples/", "/ck4/samples/", "/admin/ckeditor/samples/",
+      "/assets/ckeditor/samples/", "/plugins/ckeditor/samples/",
+      "/editor/ckeditor/samples/", "/js/ckeditor/samples/", "/static/ckeditor/samples/",
+      "/ckeditor/samples/old/", "/ckeditor/dev/", "/ckeditor/tests/",
+      "/ckeditor/CHANGES.md", "/ckeditor/README.md", "/ckeditor/ckeditor.js"
+    ],
+
+    "CKEditor 5 — 빌드·데모·노출 흔한 경로": [
+      "/ckeditor5/", "/ckeditor5/samples/", "/ckeditor5/build/",
+      "/ckeditor5/editor/", "/node_modules/ckeditor5-build-classic/",
+      "/node_modules/@ckeditor/ckeditor5-build-classic/",
+      "/node_modules/@ckeditor/ckeditor5-editor-classic/",
+      "/static/ckeditor5/", "/demo/ckeditor5/", "/assets/ckeditor5/", "/js/ckeditor5/",
+      "/ckeditor5-online-builder/", "/cdn-cgi/ckeditor5/"  // CDN 실수 노출
+    ],
+
+    "CKEditor — 파일 업로더·설정 노출 (가장 위험)": [
+      "/ckfinder/ckfinder.html", "/ckfinder/", "/ckfinder/config.js", "/ckfinder/config.ascx",
+      "/kcfinder/browse.php", "/kcfinder/", "/kcfinder/upload.php",
+      "/ckeditor/kcfinder/", "/plugins/kcfinder/", "/filemanager/",
+      "/ckeditor/filemanager/", "/ckeditor/plugins/filemanager/",
+      "/ckeditor/config.js", "/ckeditor/config.json", "/ckeditor/custom/config.js",
+      "/ckeditor/contents.css", "/ckeditor/styles.js", "/ckeditor/skins/"
+    ],
+
+    "TinyMCE 4/5/6 — 샘플·플러그인": [
+      "/tinymce/examples/", "/tinymce/js/tinymce/examples/",
+      "/tiny_mce/", "/tiny_mce/examples/", "/tinymce/plugins/filemanager/",
+      "/tinymce/filemanager/", "/tinymce/config.php", "/tinymce/tinymce.min.js"
+    ],
+
+    "Summernote·Froala·Quill": [
+      "/summernote/", "/summernote/examples/", "/summernote/upload.php",
+      "/froala_editor/", "/froala_editor/examples/", "/froala/uploads/",
+      "/quill/", "/toast-ui-editor/", "/simplemde/", "/trumbowyg/"
+    ],
+
+    "중국산 에디터 (KindEditor·UEditor·xheditor)": [
+      "/kindeditor/", "/kindeditor/examples/", "/kindeditor/kindeditor.js",
+      "/ueditor/", "/ueditor/ueditor.config.js", "/ueditor/ueditor.all.js",
+      "/ueditor/dialogs/attachment/", "/xheditor/", "/ewebeditor/"
+    ],
+
+    "공통 에디터·업로드 폴더 (실무 1위 노출)": [
+      "/editor/", "/wysiwyg/", "/htmleditor/", "/html-editor/",
+      "/upload/", "/uploads/", "/files/", "/fileupload/", "/userfiles/",
+      "/media/editor/", "/assets/uploads/", "/content/uploads/",
+      "/images/editor/", "/attached/", "/attachment/", "/data/files/",
+      "/storage/uploads/", "/public/uploads/", "/wp-content/uploads/"
+    ]
+  };
+
+  function getBase() {
+    try {
+      const u = new URL(location.href);
+      u.pathname = u.pathname.replace(/\/+$/, '');
+      return u;
+    } catch (e) { return null; }
+  }
+
+  function makeUrl(base, path) {
+    if (path.startsWith('/')) {
+      const u = new URL(base.href);
+      u.pathname = path; u.search = u.hash = '';
+      return u.href;
+    }
+    const port = base.port ? `:${base.port}` : '';
+    return `${base.protocol}//${path}.${base.hostname}${port}/`;
+  }
+
+  const old = document.getElementById('editor-explorer-pro');
+  if (old) old.remove();
+
+  const root = document.createElement('div');
+  root.id = 'editor-explorer-pro';
+  root.style.cssText = `
+    position:fixed;right:10px;top:10px;z-index:999999;width:390px;
+    max-height:92vh;background:#fff;border:3px solid #e91e63;border-radius:12px;
+    font-family:Arial,sans-serif;font-size:13px;box-shadow:0 10px 40px rgba(0,0,0,0.4);
+    overflow:hidden;display:flex;flex-direction:column;
+  `;
+
+  const header = document.createElement('div');
+  header.style.cssText = 'background:#e91e63;color:#fff;padding:9px 14px;font-weight:bold;font-size:15px;display:flex;justify-content:space-between;align-items:center;';
+  header.innerHTML = '웹 에디터 탐색기 <small style="font-weight:normal;">(FCK/CK/Tiny 등)</small>';
+  root.appendChild(header);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.style.cssText = 'background:none;border:none;color:#fff;font-size:28px;cursor:pointer;padding:0 10px;line-height:1;font-weight:bold;';
+  closeBtn.onclick = () => root.remove();
+  header.appendChild(closeBtn);
+
+  const baseInfo = document.createElement('div');
+  baseInfo.style.cssText = 'padding:7px 12px;background:#fff3e0;border-bottom:1px solid #ff8a65;font-size:12px;word-break:break-all;font-weight:600;color:#d84315;';
+  root.appendChild(baseInfo);
+
+  const btns = document.createElement('div');
+  btns.style.cssText = 'padding:9px;display:flex;flex-wrap:wrap;gap:7px;background:#fdf2f8;border-bottom:1px solid #eee;max-height:130px;overflow:auto;';
+  root.appendChild(btns);
+
+  const output = document.createElement('div');
+  output.style.cssText = 'flex:1;overflow:auto;padding:12px;background:#fff;';
+  root.appendChild(output);
+
+  document.body.appendChild(root);
+
+  Object.keys(sections).forEach(name => {
+    const b = document.createElement('button');
+    b.textContent = name.split(' ')[0];
+    b.title = name;
+    b.style.cssText = 'padding:6px 10px;font-size:11.5px;border:1.5px solid #e91e63;background:#fff;color:#e91e63;border-radius:6px;cursor:pointer;font-weight:bold;';
+    b.onclick = () => showSection(name);
+    btns.appendChild(b);
+  });
+
+  function showSection(name) {
+    output.innerHTML = `<div style="font-weight:900;color:#e91e63;margin-bottom:10px;font-size:14px;">${name} (${sections[name].length}개)</div>`;
+
+    const base = getBase();
+    if (!base) { output.innerHTML += '<div style="color:red;">URL 분석 실패</div>'; return; }
+    baseInfo.textContent = base.origin + base.pathname;
+
+    const urls = sections[name].map(p => makeUrl(base, p));
+
+    const openAll = document.createElement('button');
+    openAll.textContent = `전체 열기 (${urls.length})`;
+    openAll.style.cssText = 'margin:5px 0;padding:8px 14px;background:#e91e63;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;box-shadow:0 3px 6px rgba(0,0,0,0.2);';
+    openAll.onclick = () => {
+      if (!confirm(`${urls.length}개 탭을 엽니다. 계속?`)) return;
+      let d = 0;
+      urls.forEach(u => setTimeout(() => window.open(u, '_blank'), d += 300));
+      alert(`탭 열기 시작! (${urls.length}개)`);
+    };
+    output.appendChild(openAll);
+
+    const copyAll = document.createElement('button');
+    copyAll.textContent = '전체 복사';
+    copyAll.style.cssText = 'margin-left:8px;padding:7px 12px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;';
+    copyAll.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(urls.join('\n'));
+        copyAll.textContent = '복사됨';
+        setTimeout(() => copyAll.textContent = '전체 복사', 1500);
+      } catch(e) { alert('복사 실패'); }
+    };
+    output.appendChild(copyAll);
+
+    const list = document.createElement('div');
+    list.style.cssText = 'margin-top:12px;display:flex;flex-direction:column;gap:7px;';
+    urls.forEach(u => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:10px;align-items:center;background:#fff5f5;padding:8px;border-radius:8px;border:1px solid #fce4ec;';
+
+      const a = document.createElement('a');
+      a.href = u; a.target = '_blank'; a.textContent = u;
+      a.style.cssText = 'flex:1;color:#c2185b;font-size:12.3px;word-break:break-all;';
+      row.appendChild(a);
+
+      const c = document.createElement('button');
+      c.textContent = '복사';
+      c.style.cssText = 'padding:4px 9px;font-size:10.5px;border:1.5px solid #e91e63;background:#fff;color:#e91e63;border-radius:4px;cursor:pointer;font-weight:bold;';
+      c.onclick = async () => {
+        await navigator.clipboard.writeText(u);
+        c.textContent = '복사됨';
+        setTimeout(() => c.textContent = '복사', 1200);
+      };
+      row.appendChild(c);
+      list.appendChild(row);
+    });
+    output.appendChild(list);
+  }
+
+  const base = getBase();
+  if (base) {
+    baseInfo.textContent = base.origin + base.pathname;
+    showSection(Object.keys(sections)[0]);
+  } else {
+    baseInfo.textContent = 'URL 분석 실패';
+  }
+
+  console.log('웹 에디터 노출 경로 탐색기 — 진짜 완전판 (FCKeditor 포함) 로드 완료');
+})();
